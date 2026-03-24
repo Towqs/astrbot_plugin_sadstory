@@ -24,10 +24,16 @@
     "default": true
   },
   "custom_users": {
-    "description": "自定义虚拟用户",
+    "description": "自定义用户",
     "type": "string",
-    "hint": "手动配置角色，格式：昵称1:QQ号1,昵称2:QQ号2（如：路人甲:10001,吃瓜群众:10002）。可与素材群共存。",
+    "hint": "手动配置角色，格式：昵称1:QQ号1,昵称2:QQ号2（如：路人甲:10001,吃瓜群众:10002）。填真实QQ号会显示对应头像。可与素材群共存。",
     "default": ""
+  },
+  "use_virtual_users": {
+    "description": "使用虚拟角色",
+    "type": "bool",
+    "hint": "开启后使用自定义虚拟角色（假昵称+假QQ号，灰色头像）。关闭则从素材群或当前群读取真实用户。",
+    "default": false
   },
   "allowed_groups": {
     "description": "群白名单",

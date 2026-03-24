@@ -79,6 +79,10 @@ astrbot_plugin_sadstory/
 
 ## 📝 更新日志
 
+### v0.2.3
+- 修复头像和昵称显示问题：未配置素材群时自动从当前群拉取真实成员
+- 修复合并转发 content 格式为消息段数组，符合 NapCat 规范
+
 ### v0.2.2
 - 彻底修复群消息识别问题：改用 `AiocqhttpMessageEvent` 类型替代通用 `AstrMessageEvent`
 - 使用 `event.get_group_id()` 原生方法获取群号，不再手动解析
