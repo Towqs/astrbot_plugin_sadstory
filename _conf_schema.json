@@ -70,5 +70,11 @@
     "type": "string",
     "hint": "用于生成故事的 LLM 提供商 ID（如 openai_chat_1）。留空则使用 AstrBot 默认模型。可在 WebUI「提供商管理」中查看 ID。",
     "default": ""
+  },
+  "use_story_template": {
+    "description": "启用故事模板参考",
+    "type": "bool",
+    "hint": "开启后 LLM 生成故事时会随机选取一个模板作为风格参考。关闭则纯靠 LLM 自由发挥。模板可通过群内命令 /sadstory_addtpl 导入。",
+    "default": true
   }
 }
