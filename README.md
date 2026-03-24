@@ -77,6 +77,20 @@ astrbot_plugin_sadstory/
 - NapCat 或其他支持 `send_group_forward_msg` 的 OneBot v11 实现
 - 已配置 LLM 服务提供商
 
+## 📝 更新日志
+
+### v0.2.1
+- 修复群聊中发送 `/sadstory` 提示"只能在群聊中使用"的严重 bug
+- 群号提取方式从 `getattr(event, "group_id")` 改为解析 `event.unified_msg_origin`，兼容 AstrBot aiocqhttp 适配器
+
+### v0.2.0
+- 新增故事模板系统，支持从 `templates/` 目录加载参考素材
+- 新增自定义 LLM 模型配置
+- WebUI 可视化配置（`_conf_schema.json`）
+
+### v0.1.0
+- 初始版本，基础伤感故事生成与合并转发发送
+
 ## 📄 许可
 
 MIT License
