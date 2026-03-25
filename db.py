@@ -1,0 +1,118 @@
+import aiosqlite
+from pathlib import Path
+from astrbot.api import logger
+
+
+class SadStoryDB:
+    """写作风格和故事模板的 SQLite 存储"""
+
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self._conn = None
+
+    async def init(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = await aiosqlite.connect(str(self.db_path))
+        self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS writing_styles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                content TEXT NOT NULL
+            )
+        """)
+        await self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS story_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                content TEXT NOT NULL
+            )
+        """)
+        await self._conn.commit()
+        logger.info("[SadStory] 数据库初始化完成")
+
+    async def close(self):
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
+
+    # ========== 写作风格 ==========
+
+    async def get_styles(self) -> list[tuple[int, str, bool, str]]:
+        """返回 [(id, name, enabled, content), ...]"""
+        async with self._conn.execute("SELECT id, name, enabled, content FROM writing_styles ORDER BY id") as cur:
+            return [(r["id"], r["name"], bool(r["enabled"]), r["content"]) async for r in cur]
+
+    async def get_enabled_styles(self) -> list[str]:
+        """返回所有启用的风格内容"""
+        async with self._conn.execute("SELECT content FROM writing_styles WHERE enabled=1") as cur:
+            return [r["content"] async for r in cur]
+
+    async def add_style(self, name: str, content: str, enabled: bool = True) -> int:
+        cur = await self._conn.execute(
+            "INSERT INTO writing_styles (name, enabled, content) VALUES (?, ?, ?)",
+            (name, int(enabled), content)
+        )
+        await self._conn.commit()
+        return cur.lastrowid
+
+    async def toggle_style(self, style_id: int) -> tuple[str, bool] | None:
+        """切换启用状态，返回 (name, new_enabled) 或 None"""
+        async with self._conn.execute("SELECT name, enabled FROM writing_styles WHERE id=?", (style_id,)) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        new_enabled = not bool(row["enabled"])
+        await self._conn.execute("UPDATE writing_styles SET enabled=? WHERE id=?", (int(new_enabled), style_id))
+        await self._conn.commit()
+        return (row["name"], new_enabled)
+
+    async def delete_style(self, style_id: int) -> str | None:
+        async with self._conn.execute("SELECT name FROM writing_styles WHERE id=?", (style_id,)) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        await self._conn.execute("DELETE FROM writing_styles WHERE id=?", (style_id,))
+        await self._conn.commit()
+        return row["name"]
+
+    # ========== 故事模板 ==========
+
+    async def get_templates(self) -> list[tuple[int, str, bool, str]]:
+        """返回 [(id, name, enabled, content), ...]"""
+        async with self._conn.execute("SELECT id, name, enabled, content FROM story_templates ORDER BY id") as cur:
+            return [(r["id"], r["name"], bool(r["enabled"]), r["content"]) async for r in cur]
+
+    async def get_enabled_templates(self) -> list[str]:
+        """返回所有启用的模板内容"""
+        async with self._conn.execute("SELECT content FROM story_templates WHERE enabled=1") as cur:
+            return [r["content"] async for r in cur]
+
+    async def add_template(self, name: str, content: str, enabled: bool = True) -> int:
+        cur = await self._conn.execute(
+            "INSERT INTO story_templates (name, enabled, content) VALUES (?, ?, ?)",
+            (name, int(enabled), content)
+        )
+        await self._conn.commit()
+        return cur.lastrowid
+
+    async def toggle_template(self, tpl_id: int) -> tuple[str, bool] | None:
+        async with self._conn.execute("SELECT name, enabled FROM story_templates WHERE id=?", (tpl_id,)) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        new_enabled = not bool(row["enabled"])
+        await self._conn.execute("UPDATE story_templates SET enabled=? WHERE id=?", (int(new_enabled), tpl_id))
+        await self._conn.commit()
+        return (row["name"], new_enabled)
+
+    async def delete_template(self, tpl_id: int) -> str | None:
+        async with self._conn.execute("SELECT name FROM story_templates WHERE id=?", (tpl_id,)) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        await self._conn.execute("DELETE FROM story_templates WHERE id=?", (tpl_id,))
+        await self._conn.commit()
+        return row["name"]

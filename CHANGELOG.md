@@ -1,5 +1,13 @@
 # 更新日志
 
+## v0.4.0
+- 写作风格和故事模板改用 SQLite 数据库存储，彻底绕开 WebUI template_list 的兼容性问题
+- 新增 /sadstory_delstyle 指令：删除写作风格
+- 所有风格/模板操作永久生效，不再是"仅本次运行"
+- 从 _conf_schema.json 移除 template_list 字段，避免格式校验冲突
+- 新增 db.py 数据库模块
+- 新增 aiosqlite 依赖
+
 ## v0.3.7
 - 修复 template_list 旧数据冲突：字段名改为 writing_styles / story_refs，避免旧字符串数据导致校验失败
 
