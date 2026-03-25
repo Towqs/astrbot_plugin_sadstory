@@ -126,7 +126,7 @@ EMOJI_INSTRUCTION = """- 可以在台词中适当插入QQ表情来增加真实�
 """
 
 
-@register("astrbot_plugin_sadstory", "Towqs", "伤感故事插件 - 以合并转发形式在群聊中展示伤感故事", "0.3.4")
+@register("astrbot_plugin_sadstory", "Towqs", "伤感故事插件 - 以合并转发形式在群聊中展示伤感故事", "0.3.5")
 class SadStoryPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -164,23 +164,27 @@ class SadStoryPlugin(Star):
         self.use_face_emoji = self._parse_bool(cfg.get("use_face_emoji", True))
         self.use_casual_style = self._parse_bool(cfg.get("use_casual_style", True))
 
-        # 解析 prompt 风格模板列表（每条格式：风格名|启用|prompt内容）
+        # 解析 prompt 风格列表（template_list 格式）
         raw_styles = cfg.get("prompt_styles", [])
         self.prompt_styles = []  # [(name, enabled, content), ...]
         if isinstance(raw_styles, list):
             for s in raw_styles:
-                s = str(s).strip()
-                if not s:
-                    continue
-                parts = s.split("|", 2)
-                if len(parts) == 3:
-                    style_name = parts[0].strip()
-                    enabled = parts[1].strip() in ("是", "true", "True", "1", "yes")
-                    content = parts[2].strip()
-                    if style_name and content:
-                        self.prompt_styles.append((style_name, enabled, content))
-                else:
-                    self.prompt_styles.append(("未命名风格", True, s))
+                if isinstance(s, dict):
+                    # template_list 格式：{"__template_key": "style", "style_name": "...", "enabled": true, "prompt_content": "..."}
+                    name = str(s.get("style_name", "未命名风格")).strip()
+                    enabled = self._parse_bool(s.get("enabled", True))
+                    content = str(s.get("prompt_content", "")).strip()
+                    if name and content:
+                        self.prompt_styles.append((name, enabled, content))
+                elif isinstance(s, str) and s.strip():
+                    # 兼容旧格式：风格名|是|prompt内容
+                    parts = s.strip().split("|", 2)
+                    if len(parts) == 3:
+                        name = parts[0].strip()
+                        enabled = parts[1].strip() in ("是", "true", "True", "1", "yes")
+                        content = parts[2].strip()
+                        if name and content:
+                            self.prompt_styles.append((name, enabled, content))
 
         # 解析主讲人QQ号列表
         raw_protagonists = cfg.get("protagonist_qq_list", [])
@@ -200,24 +204,29 @@ class SadStoryPlugin(Star):
                 if qq:
                     self.custom_bystanders.append({"nickname": "", "user_id": qq})
 
-        # 解析模板列表（每条格式：模板名|启用|内容）
+        # 解析故事模板列表（template_list 格式）
         raw_templates = cfg.get("story_templates", [])
         self.config_templates = []  # [(name, enabled, content), ...]
         if isinstance(raw_templates, list):
             for t in raw_templates:
-                t = str(t).strip()
-                if not t:
-                    continue
-                parts = t.split("|", 2)
-                if len(parts) == 3:
-                    tpl_name = parts[0].strip()
-                    enabled = parts[1].strip() in ("是", "true", "True", "1", "yes")
-                    content = parts[2].strip()
-                    if tpl_name and content:
-                        self.config_templates.append((tpl_name, enabled, content))
-                else:
-                    # 兼容旧格式（纯文本模板，默认启用）
-                    self.config_templates.append(("未命名", True, t))
+                if isinstance(t, dict):
+                    # template_list 格式：{"__template_key": "tpl", "tpl_name": "...", "enabled": true, "content": "..."}
+                    name = str(t.get("tpl_name", "未命名")).strip()
+                    enabled = self._parse_bool(t.get("enabled", True))
+                    content = str(t.get("content", "")).strip()
+                    if name and content:
+                        self.config_templates.append((name, enabled, content))
+                elif isinstance(t, str) and t.strip():
+                    # 兼容旧格式：模板名|是|内容
+                    parts = t.strip().split("|", 2)
+                    if len(parts) == 3:
+                        name = parts[0].strip()
+                        enabled = parts[1].strip() in ("是", "true", "True", "1", "yes")
+                        content = parts[2].strip()
+                        if name and content:
+                            self.config_templates.append((name, enabled, content))
+                    else:
+                        self.config_templates.append(("未命名", True, t.strip()))
 
         logger.info(f"[SadStory] 配置加载: 主讲人={len(self.custom_protagonists)}, 网友={len(self.custom_bystanders)}, 素材群={self.source_group_id}")
         # 合并用户池
