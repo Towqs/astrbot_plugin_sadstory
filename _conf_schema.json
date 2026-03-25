@@ -14,13 +14,13 @@
   "protagonist_qq_list": {
     "description": "主讲人QQ号",
     "type": "list",
-    "hint": "每条填一个QQ号，故事主角会从这里面随机选。昵称自动从群获取。点加号添加。",
+    "hint": "每条填一个QQ号，故事主角从这里随机选。昵称自动从群获取。点加号添加。",
     "default": []
   },
   "bystander_qq_list": {
     "description": "网友QQ号",
     "type": "list",
-    "hint": "每条填一个QQ号，作为围观网友角色。昵称自动从群获取。点加号添加。留空则从素材群或当前群随机选。",
+    "hint": "每条填一个QQ号，作为围观网友。昵称自动从群获取。点加号添加。留空则从素材群或当前群随机选。",
     "default": []
   },
   "use_virtual_users": {
@@ -59,6 +59,12 @@
     "hint": "用于生成故事的 LLM 提供商 ID（如 openai_chat_1）。留空则使用 AstrBot 默认模型。可在 WebUI「提供商管理」中查看 ID。",
     "default": ""
   },
+  "use_casual_style": {
+    "description": "口语化风格",
+    "type": "bool",
+    "hint": "开启后故事用口语化、碎片化的群聊风格（像真人打字）。关闭则用文学化、细腻的叙事风格。",
+    "default": true
+  },
   "use_story_template": {
     "description": "启用故事模板参考",
     "type": "bool",
@@ -74,7 +80,7 @@
   "story_templates": {
     "description": "故事模板列表",
     "type": "list",
-    "hint": "每条格式：模板名|是|模板内容。「是」表示启用，「否」表示禁用。也可通过群内命令管理。",
+    "hint": "每条格式：模板名|是|模板内容。「是」=启用，「否」=禁用。示例：校园故事|是|她是有点偏执的那种...",
     "default": []
   }
 }
