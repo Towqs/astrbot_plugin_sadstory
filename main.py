@@ -513,7 +513,7 @@ class SadStoryPlugin(Star):
 
         self._set_cooldown(group_id_str)  # 通过检查后立即预占冷却
 
-        theme = event.message_str.replace("/sadstory", "").strip()
+        theme = event.message_str.partition(" ")[2].strip()
         if len(theme) > 100:
             theme = theme[:100]
 
@@ -586,8 +586,10 @@ class SadStoryPlugin(Star):
     async def add_template(self, event: AiocqhttpMessageEvent, tpl_name: str = ""):
         """添加故事模板。用法：/sadstory_addtpl 模板名（换行后跟模板内容），仅管理员可用"""
         raw = event.message_str
-        parts = raw.split("\n", 1)
-        first_line = parts[0].replace("/sadstory_addtpl", "").strip()
+        # 去掉命令名，取第一个空格后的内容
+        after_cmd = raw.partition(" ")[2]
+        parts = after_cmd.split("\n", 1)
+        first_line = parts[0].strip()
         content = parts[1].strip() if len(parts) > 1 else ""
 
         if not first_line:
@@ -640,7 +642,7 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_usetpl", permission=True)
     async def use_template(self, event: AiocqhttpMessageEvent):
         """启用/禁用指定模板。用法：/sadstory_usetpl ID，仅管理员可用"""
-        arg = event.message_str.replace("/sadstory_usetpl", "").strip()
+        arg = event.message_str.partition(" ")[2].strip()
         if not arg:
             yield event.plain_result("用法：/sadstory_usetpl ID\n（ID 可通过 /sadstory_listtpl 查看方括号内的数字）")
             return
@@ -660,7 +662,7 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_deltpl", permission=True)
     async def delete_template(self, event: AiocqhttpMessageEvent, tpl_name: str = ""):
         """删除故事模板。用法：/sadstory_deltpl ID 或文件名，仅管理员可用"""
-        arg = event.message_str.replace("/sadstory_deltpl", "").strip()
+        arg = event.message_str.partition(" ")[2].strip()
         if not arg:
             yield event.plain_result("用法：/sadstory_deltpl ID（数据库模板）或 /sadstory_deltpl 文件名（文件模板）")
             return
@@ -759,8 +761,9 @@ class SadStoryPlugin(Star):
     async def add_style(self, event: AiocqhttpMessageEvent):
         """添加写作风格。用法：/sadstory_addstyle 风格名（换行后跟内容），仅管理员可用"""
         raw = event.message_str
-        parts = raw.split("\n", 1)
-        first_line = parts[0].replace("/sadstory_addstyle", "").strip()
+        after_cmd = raw.partition(" ")[2]
+        parts = after_cmd.split("\n", 1)
+        first_line = parts[0].strip()
         content = parts[1].strip() if len(parts) > 1 else ""
         if not first_line:
             yield event.plain_result(
@@ -779,7 +782,8 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_usestyle", permission=True)
     async def toggle_style(self, event: AiocqhttpMessageEvent):
         """启用/禁用写作风格。用法：/sadstory_usestyle ID，仅管理员可用"""
-        arg = event.message_str.replace("/sadstory_usestyle", "").strip()
+        logger.debug(f"[SadStory] sadstory_usestyle message_str={event.message_str!r}")
+        arg = event.message_str.partition(" ")[2].strip()
         if not arg:
             yield event.plain_result("用法：/sadstory_usestyle ID\n（ID 可通过 /sadstory_style 查看方括号内的数字）")
             return
@@ -803,7 +807,7 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_delstyle", permission=True)
     async def delete_style(self, event: AiocqhttpMessageEvent):
         """删除写作风格。用法：/sadstory_delstyle ID，仅管理员可用"""
-        arg = event.message_str.replace("/sadstory_delstyle", "").strip()
+        arg = event.message_str.partition(" ")[2].strip()
         if not arg:
             yield event.plain_result("用法：/sadstory_delstyle ID\n（ID 可通过 /sadstory_style 查看）")
             return
@@ -872,7 +876,7 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_aistyle", permission=True)
     async def ai_add_style(self, event: AiocqhttpMessageEvent):
         """让 AI 生成并写入写作风格。用法：/sadstory_aistyle 风格描述，仅管理员可用"""
-        desc = event.message_str.replace("/sadstory_aistyle", "").strip()
+        desc = event.message_str.partition(" ")[2].strip()
         if not desc:
             yield event.plain_result(
                 "用法：/sadstory_aistyle 风格描述\n"
@@ -910,7 +914,7 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_aitpl", permission=True)
     async def ai_add_template(self, event: AiocqhttpMessageEvent):
         """让 AI 生成并写入故事模板。用法：/sadstory_aitpl 故事描述，仅管理员可用"""
-        desc = event.message_str.replace("/sadstory_aitpl", "").strip()
+        desc = event.message_str.partition(" ")[2].strip()
         if not desc:
             yield event.plain_result(
                 "用法：/sadstory_aitpl 故事描述\n"
