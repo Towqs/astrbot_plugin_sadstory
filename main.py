@@ -126,7 +126,7 @@ EMOJI_INSTRUCTION = """- 可以在台词中适当插入QQ表情来增加真实�
 """
 
 
-@register("astrbot_plugin_sadstory", "Towqs", "伤感故事插件 - 以合并转发形式在群聊中展示伤感故事", "0.3.5")
+@register("astrbot_plugin_sadstory", "Towqs", "伤感故事插件 - 以合并转发形式在群聊中展示伤感故事", "0.3.6")
 class SadStoryPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -656,7 +656,6 @@ class SadStoryPlugin(Star):
             yield event.plain_result("请输入模板序号（数字）")
             return
 
-        self._reload_config()
         total_config = len(self.config_templates)
 
         if target_idx < 1 or target_idx > total_config:
@@ -698,6 +697,69 @@ class SadStoryPlugin(Star):
             yield event.plain_result(f"删除失败: {e}")
 
     # ==================== Prompt 风格指令 ====================
+
+    @filter.command("sadstory_config", permission=True)
+    async def show_config(self, event: AiocqhttpMessageEvent):
+        """查看当前所有配置。用法：/sadstory_config，仅管理员可用"""
+        self._reload_config()
+        lines = []
+
+        # 基础参数
+        lines.append("📋 伤感故事 当前配置")
+        lines.append("─────────────────")
+        lines.append(f"消息条数：{self.story_min_messages} ~ {self.story_max_messages}")
+        lines.append(f"围观网友数：{self.bystander_count}")
+        lines.append(f"冷却时间：{self.cooldown_seconds}秒")
+        lines.append(f"QQ表情：{'✅ 开启' if self.use_face_emoji else '❌ 关闭'}")
+        lines.append(f"虚拟角色：{'✅ 开启' if self.use_virtual_users else '❌ 关闭'}")
+        lines.append(f"群名片优先：{'✅ 是' if self.use_card_as_name else '❌ 否'}")
+        lines.append(f"LLM模型：{self.chat_provider_id or '默认'}")
+        lines.append(f"素材群：{self.source_group_id or '未配置'}")
+        lines.append(f"用户池：{len(self.user_pool)}人")
+
+        # 角色
+        if self.custom_protagonists:
+            pids = ", ".join(u["user_id"] for u in self.custom_protagonists)
+            lines.append(f"主讲人：{pids}")
+        if self.custom_bystanders:
+            bids = ", ".join(u["user_id"] for u in self.custom_bystanders)
+            lines.append(f"网友：{bids}")
+
+        # 写作风格
+        lines.append("")
+        lines.append("─── 写作风格 ───")
+        if self.prompt_styles:
+            enabled_count = sum(1 for _, en, _ in self.prompt_styles if en)
+            for idx, (name, enabled, content) in enumerate(self.prompt_styles, 1):
+                status = "✅" if enabled else "❌"
+                lines.append(f"  {idx}. {status} {name}（{len(content)}字）")
+            lines.append(f"  启用 {enabled_count}/{len(self.prompt_styles)}，生成时随机选取")
+        else:
+            fallback = "口语化" if self.use_casual_style else "文学"
+            lines.append(f"  未配置，使用内置{fallback}风格")
+
+        # 故事模板
+        lines.append("")
+        lines.append("─── 故事模板 ───")
+        lines.append(f"模板参考：{'✅ 开启' if self.use_story_template else '❌ 关闭'}")
+        tpl_count = 0
+        if self.config_templates:
+            for idx, (name, enabled, content) in enumerate(self.config_templates, 1):
+                status = "✅" if enabled else "❌"
+                lines.append(f"  {idx}. {status} {name}（{len(content)}字）")
+                tpl_count += 1
+        # 文件模板
+        file_tpls = []
+        if os.path.isdir(TEMPLATES_DIR):
+            file_tpls = [f for f in sorted(os.listdir(TEMPLATES_DIR)) if f.endswith(".txt")]
+        for fname in file_tpls:
+            tpl_count += 1
+            name = fname.replace(".txt", "")
+            lines.append(f"  {tpl_count}. ✅ {name}（文件）")
+        if tpl_count == 0:
+            lines.append("  暂无模板")
+
+        yield event.plain_result("\n".join(lines))
 
     @filter.command("sadstory_style", permission=True)
     async def show_styles(self, event: AiocqhttpMessageEvent):
@@ -784,7 +846,6 @@ class SadStoryPlugin(Star):
             yield event.plain_result("请输入风格序号（数字）")
             return
 
-        self._reload_config()
         if target_idx < 1 or target_idx > len(self.prompt_styles):
             yield event.plain_result(f"序号超出范围，当前共 {len(self.prompt_styles)} 个风格")
             return
