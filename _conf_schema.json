@@ -11,16 +11,22 @@
     "hint": "开启后优先使用群名片作为角色昵称，关闭则使用QQ昵称。",
     "default": true
   },
-  "custom_users": {
-    "description": "自定义角色列表",
+  "protagonist_qq_list": {
+    "description": "主讲人QQ号",
     "type": "list",
-    "hint": "每个条目格式：昵称:QQ号:角色（角色填 主讲人 或 网友）。如：小明:123456:主讲人。点加号添加新角色，填真实QQ号会显示对应头像。",
+    "hint": "每条填一个QQ号，故事主角会从这里面随机选。昵称自动从群获取。点加号添加。",
+    "default": []
+  },
+  "bystander_qq_list": {
+    "description": "网友QQ号",
+    "type": "list",
+    "hint": "每条填一个QQ号，作为围观网友角色。昵称自动从群获取。点加号添加。留空则从素材群或当前群随机选。",
     "default": []
   },
   "use_virtual_users": {
     "description": "使用虚拟角色",
     "type": "bool",
-    "hint": "开启后使用自定义虚拟角色（假昵称+假QQ号，灰色头像）。关闭则从素材群或当前群读取真实用户。",
+    "hint": "开启后使用预设虚拟角色（假昵称+灰色头像）。关闭则从上面配置的QQ号或素材群读取真实用户。",
     "default": false
   },
   "cooldown_seconds": {
@@ -68,7 +74,7 @@
   "story_templates": {
     "description": "故事模板列表",
     "type": "list",
-    "hint": "每个条目格式：模板名|启用|模板内容。如：校园故事|是|她是有点偏执的那种...。启用填「是」或「否」来控制该模板是否参与随机选取。也可通过群内命令管理。",
+    "hint": "每条格式：模板名|是|模板内容。「是」表示启用，「否」表示禁用。也可通过群内命令管理。",
     "default": []
   }
 }
