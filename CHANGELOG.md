@@ -1,5 +1,8 @@
 # 更新日志
 
+## v0.3.7
+- 修复 template_list 旧数据冲突：字段名改为 writing_styles / story_refs，避免旧字符串数据导致校验失败
+
 ## v0.3.6
 - 新增 `/sadstory_config` 指令：一次性查看所有配置状态（参数、角色、写作风格、故事模板）
 - 修复 `/sadstory_usestyle` 和 `/sadstory_usetpl` 切换状态后被 reload 覆盖的 bug

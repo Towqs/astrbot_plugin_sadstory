@@ -39,7 +39,7 @@
     "hint": "当下方「写作风格」没有启用项时的后备。开启=口语化，关闭=文学风格。",
     "default": true
   },
-  "prompt_styles": {
+  "writing_styles": {
     "description": "写作风格",
     "type": "template_list",
     "templates": {
@@ -73,7 +73,7 @@
     "hint": "开启后生成故事时会随机选一个模板给 AI 参考风格。关闭则纯靠 AI 自由发挥。",
     "default": true
   },
-  "story_templates": {
+  "story_refs": {
     "description": "故事模板",
     "type": "template_list",
     "templates": {
