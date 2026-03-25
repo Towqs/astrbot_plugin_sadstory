@@ -99,70 +99,96 @@ EMOJI_INSTRUCTION = """- 可以在台词中适当插入QQ表情来增加真实�
 """
 
 
-@register("astrbot_plugin_sadstory", "Towqs", "伤感故事插件 - 以合并转发形式在群聊中展示伤感故事", "0.2.9")
+@register("astrbot_plugin_sadstory", "Towqs", "伤感故事插件 - 以合并转发形式在群聊中展示伤感故事", "0.3.0")
 class SadStoryPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        self.user_pool = []
-        self.group_users = []
+        self.user_pool = []  # 最终用户池：自定义角色 + 素材群成员
+        self.group_users = []  # 从素材群拉取的成员
         self.cooldown_map = {}
 
     async def initialize(self):
         self._reload_config()
-        logger.info(f"[SadStory] 插件初始化完成，手动配置用户数: {len(self.user_pool)}")
+        logger.info(f"[SadStory] 插件初始化完成，自定义角色数: {len(self.custom_protagonists) + len(self.custom_bystanders)}")
 
     # ==================== 配置管理 ====================
+
+    @staticmethod
+    def _parse_bool(val) -> bool:
+        """兼容 WebUI 返回的各种 bool 格式"""
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, str):
+            return val.lower() in ("true", "1", "yes", "是")
+        return bool(val)
 
     def _reload_config(self):
         cfg = self.context.get_config()
 
         self.source_group_id = self._parse_int(cfg.get("source_group_id", ""), 0)
-        self.include_users = self._parse_list(cfg.get("include_users", ""))
-        self.exclude_users = self._parse_list(cfg.get("exclude_users", ""))
-        self.use_card_as_name = cfg.get("use_card_as_name", True)
-        self.allowed_groups = self._parse_list(cfg.get("allowed_groups", ""))
+        self.use_card_as_name = self._parse_bool(cfg.get("use_card_as_name", True))
         self.cooldown_seconds = self._parse_int(cfg.get("cooldown_seconds", ""), 60)
         self.story_min_messages = self._parse_int(cfg.get("story_min_messages", ""), 30)
         self.story_max_messages = self._parse_int(cfg.get("story_max_messages", ""), 80)
         self.bystander_count = self._parse_int(cfg.get("bystander_count", ""), 3)
         self.chat_provider_id = str(cfg.get("chat_provider_id", "")).strip()
-        self.use_virtual_users = cfg.get("use_virtual_users", False)
-        self.use_story_template = cfg.get("use_story_template", True)
-        self.use_face_emoji = cfg.get("use_face_emoji", True)
+        self.use_virtual_users = self._parse_bool(cfg.get("use_virtual_users", False))
+        self.use_story_template = self._parse_bool(cfg.get("use_story_template", True))
+        self.use_face_emoji = self._parse_bool(cfg.get("use_face_emoji", True))
 
-        # 从 WebUI 配置读取模板列表
+        # 解析自定义角色列表（list 类型，每条格式：昵称:QQ号:角色）
+        raw_users = cfg.get("custom_users", [])
+        self.custom_protagonists = []  # 主讲人
+        self.custom_bystanders = []    # 网友
+        if isinstance(raw_users, list):
+            for item in raw_users:
+                item = str(item).strip()
+                if not item:
+                    continue
+                # 支持英文冒号和中文冒号
+                parts = re.split(r'[:：]', item)
+                if len(parts) >= 2:
+                    name = parts[0].strip()
+                    uid = parts[1].strip()
+                    role = parts[2].strip() if len(parts) >= 3 else "网友"
+                    if name and uid:
+                        user = {"nickname": name, "user_id": uid}
+                        if role == "主讲人":
+                            self.custom_protagonists.append(user)
+                        else:
+                            self.custom_bystanders.append(user)
+
+        # 解析模板列表（每条格式：模板名|启用|内容）
         raw_templates = cfg.get("story_templates", [])
-        self.config_templates = []
+        self.config_templates = []  # [(name, enabled, content), ...]
         if isinstance(raw_templates, list):
             for t in raw_templates:
                 t = str(t).strip()
-                if t:
-                    self.config_templates.append(t)
+                if not t:
+                    continue
+                parts = t.split("|", 2)
+                if len(parts) == 3:
+                    tpl_name = parts[0].strip()
+                    enabled = parts[1].strip() in ("是", "true", "True", "1", "yes")
+                    content = parts[2].strip()
+                    if tpl_name and content:
+                        self.config_templates.append((tpl_name, enabled, content))
+                else:
+                    # 兼容旧格式（纯文本模板，默认启用）
+                    self.config_templates.append(("未命名", True, t))
 
-        # 解析自定义用户：格式 "昵称1:QQ号1,昵称2:QQ号2"
-        custom_str = cfg.get("custom_users", "")
-        custom_users = []
-        if custom_str and str(custom_str).strip():
-            for pair in str(custom_str).split(","):
-                pair = pair.strip()
-                if ":" in pair:
-                    name, uid = pair.split(":", 1)
-                    name, uid = name.strip(), uid.strip()
-                    if name and uid:
-                        custom_users.append({"nickname": name, "user_id": uid})
-                elif "：" in pair:  # 兼容中文冒号
-                    name, uid = pair.split("：", 1)
-                    name, uid = name.strip(), uid.strip()
-                    if name and uid:
-                        custom_users.append({"nickname": name, "user_id": uid})
-
-        logger.info(f"[SadStory] 配置加载: 自定义用户={custom_users}, 素材群={self.source_group_id}, 虚拟模式={self.use_virtual_users}")
-        self.user_pool = custom_users + self.group_users
+        logger.info(f"[SadStory] 配置加载: 主讲人={len(self.custom_protagonists)}, 网友={len(self.custom_bystanders)}, 素材群={self.source_group_id}")
+        # 合并用户池
+        self.user_pool = self.custom_protagonists + self.custom_bystanders + self.group_users
 
     def _load_templates(self) -> list:
-        """加载所有模板：WebUI 配置中的 + templates/ 目录下的文件"""
-        templates = list(self.config_templates)  # 先加配置里的
-        # 再加文件里的
+        """加载所有已启用的模板：WebUI 配置中的 + templates/ 目录下的文件"""
+        templates = []
+        # 配置中的模板（只加载启用的）
+        for name, enabled, content in self.config_templates:
+            if enabled:
+                templates.append(content)
+        # 文件模板（templates/ 目录下的始终加载）
         if os.path.isdir(TEMPLATES_DIR):
             for fname in sorted(os.listdir(TEMPLATES_DIR)):
                 if fname.endswith(".txt"):
@@ -174,15 +200,9 @@ class SadStoryPlugin(Star):
                             templates.append(content)
                     except Exception as e:
                         logger.warning(f"[SadStory] 加载模板 {fname} 失败: {e}")
-        logger.info(f"[SadStory] 模板总数: {len(templates)}（配置: {len(self.config_templates)}, 文件: {len(templates) - len(self.config_templates)}）")
+        config_enabled = sum(1 for _, e, _ in self.config_templates if e)
+        logger.info(f"[SadStory] 模板总数: {len(templates)}（配置启用: {config_enabled}, 文件: {len(templates) - config_enabled}）")
         return templates
-
-    @staticmethod
-    def _parse_list(s) -> list:
-        s = str(s) if s is not None else ""
-        if not s.strip():
-            return []
-        return [x.strip() for x in s.split(",") if x.strip()]
 
     @staticmethod
     def _parse_int(s, default: int = 0) -> int:
@@ -199,10 +219,6 @@ class SadStoryPlugin(Star):
             users = []
             for m in members:
                 uid = str(m.get("user_id", ""))
-                if self.include_users and uid not in self.include_users:
-                    continue
-                if uid in self.exclude_users:
-                    continue
                 nickname = m.get("card", "") if self.use_card_as_name else ""
                 if not nickname:
                     nickname = m.get("nickname", f"用户{uid[-4:]}")
@@ -226,7 +242,6 @@ class SadStoryPlugin(Star):
                 {"nickname": "匿名网友", "user_id": "10005"},
                 {"nickname": "故事收集者", "user_id": "10006"},
             ]
-        # 非虚拟模式：返回空，由命令处理中自动拉取真实群成员
         return []
 
     # ==================== 冷却检查 ====================
@@ -247,10 +262,21 @@ class SadStoryPlugin(Star):
         if len(users) < 2:
             return []
 
-        random.shuffle(users)
-        protagonist = users[0]
-        bystander_count = min(self.bystander_count, len(users) - 1)
-        bystanders = users[1:1 + bystander_count]
+        # 如果有指定主讲人，优先选主讲人；否则随机
+        if self.custom_protagonists:
+            protagonist = random.choice(self.custom_protagonists)
+            # 围观网友从非主讲人中选
+            other_users = [u for u in users if u["user_id"] != protagonist["user_id"]]
+        else:
+            random.shuffle(users)
+            protagonist = users[0]
+            other_users = users[1:]
+
+        bystander_count = min(self.bystander_count, len(other_users))
+        if bystander_count == 0:
+            return []
+        random.shuffle(other_users)
+        bystanders = other_users[:bystander_count]
 
         bystander_names = "、".join([u["nickname"] for u in bystanders])
         theme_line = f"6. 故事主题/关键词：{theme}" if theme else ""
@@ -286,7 +312,6 @@ class SadStoryPlugin(Star):
                 provider_id = await self.context.get_current_chat_provider_id(
                     event.unified_msg_origin
                 )
-            # 使用 llm_generate 独立调用，不带会话历史，避免上下文污染
             llm_resp = await self.context.llm_generate(
                 chat_provider_id=provider_id,
                 prompt=prompt,
@@ -336,31 +361,22 @@ class SadStoryPlugin(Star):
         last_end = 0
 
         for match in re.finditer(pattern, content):
-            # 表情前的文本
             before = content[last_end:match.start()]
             if before:
                 segments.append({"type": "text", "data": {"text": before}})
-
-            # 表情本身
             face_name = match.group(1).strip()
             face_id = FACE_MAP.get(face_name)
             if face_id is not None:
                 segments.append({"type": "face", "data": {"id": str(face_id)}})
             else:
-                # 未知表情名，保留原文
                 segments.append({"type": "text", "data": {"text": match.group(0)}})
-
             last_end = match.end()
 
-        # 剩余文本
         remaining = content[last_end:]
         if remaining:
             segments.append({"type": "text", "data": {"text": remaining}})
-
-        # 如果整个内容没有任何段，兜底
         if not segments:
             segments.append({"type": "text", "data": {"text": content}})
-
         return segments
 
     def _build_forward_nodes(self, messages: list) -> list:
@@ -370,7 +386,6 @@ class SadStoryPlugin(Star):
                 content_segments = self._parse_content_segments(msg["content"])
             else:
                 content_segments = [{"type": "text", "data": {"text": msg["content"]}}]
-
             nodes.append({
                 "type": "node",
                 "data": {
@@ -388,22 +403,15 @@ class SadStoryPlugin(Star):
         """发送一段伤感故事（合并转发形式）。用法：/sadstory [主题]，仅管理员可用"""
         self._reload_config()
 
-        # 使用 AiocqhttpMessageEvent 的 get_group_id() 方法
         group_id_str = event.get_group_id()
         if not group_id_str or group_id_str == "0":
             yield event.plain_result("这个命令只能在群聊中使用哦~")
             return
 
-        # 检查群白名单
-        if self.allowed_groups and group_id_str not in self.allowed_groups:
-            return
-
-        # 检查冷却
         if not self._check_cooldown(group_id_str):
             yield event.plain_result(f"故事讲太快了，休息一下吧~ ({self.cooldown_seconds}秒冷却)")
             return
 
-        # 获取主题参数
         theme = event.message_str.replace("/sadstory", "").strip()
 
         # 如果素材群有配置且用户池为空，尝试拉取
@@ -411,14 +419,14 @@ class SadStoryPlugin(Star):
             fetched = await self._fetch_group_users(event.bot, self.source_group_id)
             if fetched:
                 self.group_users = fetched
-                self._reload_config()  # 重新合并 user_pool
+                self._reload_config()
 
         # 非虚拟模式下，如果用户池仍为空，从当前群拉取真实成员
         if not self.use_virtual_users and not self.user_pool:
             fetched = await self._fetch_group_users(event.bot, int(group_id_str))
             if fetched:
                 self.group_users = fetched
-                self._reload_config()  # 重新合并 user_pool
+                self._reload_config()
 
         logger.info(f"[SadStory] 当前用户池大小: {len(self.user_pool)}, 虚拟模式: {self.use_virtual_users}")
 
@@ -461,7 +469,6 @@ class SadStoryPlugin(Star):
     async def add_template(self, event: AiocqhttpMessageEvent, tpl_name: str = ""):
         """添加故事模板。用法：/sadstory_addtpl 模板名（换行后跟模板内容），仅管理员可用"""
         raw = event.message_str
-        # 去掉命令部分，取剩余内容
         parts = raw.split("\n", 1)
         first_line = parts[0].replace("/sadstory_addtpl", "").strip()
         content = parts[1].strip() if len(parts) > 1 else ""
@@ -474,10 +481,7 @@ class SadStoryPlugin(Star):
             yield event.plain_result("模板内容不能为空，请在模板名后换行输入故事内容")
             return
 
-        # 确保 templates 目录存在
         os.makedirs(TEMPLATES_DIR, exist_ok=True)
-
-        # 保存模板文件
         safe_name = first_line.replace("/", "_").replace("\\", "_").replace(".", "_")
         fpath = os.path.join(TEMPLATES_DIR, f"{safe_name}.txt")
         try:
@@ -498,9 +502,10 @@ class SadStoryPlugin(Star):
         # WebUI 配置中的模板
         if self.config_templates:
             lines.append(f"📋 后台配置模板（{len(self.config_templates)}个）：")
-            for t in self.config_templates:
-                preview = t[:50].replace("\n", " ") + ("..." if len(t) > 50 else "")
-                lines.append(f"  {idx}. {preview}")
+            for name, enabled, content in self.config_templates:
+                status = "✅" if enabled else "❌"
+                preview = content[:40].replace("\n", " ") + ("..." if len(content) > 40 else "")
+                lines.append(f"  {idx}. {status} {name}：{preview}")
                 idx += 1
 
         # 文件模板
@@ -508,12 +513,12 @@ class SadStoryPlugin(Star):
         if os.path.isdir(TEMPLATES_DIR):
             file_templates = [f for f in sorted(os.listdir(TEMPLATES_DIR)) if f.endswith(".txt")]
         if file_templates:
-            lines.append(f"📁 文件模板（{len(file_templates)}个）：")
+            lines.append(f"📁 文件模板（{len(file_templates)}个，始终启用）：")
             for fname in file_templates:
                 fpath = os.path.join(TEMPLATES_DIR, fname)
                 size = os.path.getsize(fpath)
                 name = fname.replace(".txt", "")
-                lines.append(f"  {idx}. {name}（{size}字节）")
+                lines.append(f"  {idx}. ✅ {name}（{size}字节）")
                 idx += 1
 
         if not lines:
@@ -524,6 +529,42 @@ class SadStoryPlugin(Star):
         lines.append(f"\n模板参考当前{'已启用 ✅' if self.use_story_template else '已关闭 ❌'}")
         yield event.plain_result("\n".join(lines))
 
+    @filter.command("sadstory_usetpl", permission=True)
+    async def use_template(self, event: AiocqhttpMessageEvent):
+        """启用/禁用指定模板。用法：/sadstory_usetpl 模板序号，仅管理员可用"""
+        arg = event.message_str.replace("/sadstory_usetpl", "").strip()
+        if not arg:
+            yield event.plain_result("用法：/sadstory_usetpl 序号\n（序号可通过 /sadstory_listtpl 查看）\n\n效果：切换该模板的启用/禁用状态")
+            return
+
+        try:
+            target_idx = int(arg)
+        except ValueError:
+            yield event.plain_result("请输入模板序号（数字）")
+            return
+
+        self._reload_config()
+        total_config = len(self.config_templates)
+
+        if target_idx < 1 or target_idx > total_config:
+            file_count = 0
+            if os.path.isdir(TEMPLATES_DIR):
+                file_count = len([f for f in os.listdir(TEMPLATES_DIR) if f.endswith(".txt")])
+            if target_idx > total_config and target_idx <= total_config + file_count:
+                yield event.plain_result("文件模板始终启用，无法切换。如需删除请用 /sadstory_deltpl")
+                return
+            yield event.plain_result(f"序号超出范围，当前共 {total_config} 个后台模板")
+            return
+
+        # 切换启用状态
+        name, enabled, content = self.config_templates[target_idx - 1]
+        new_enabled = not enabled
+        new_status = "已启用 ✅" if new_enabled else "已禁用 ❌"
+        yield event.plain_result(f"模板「{name}」{new_status}\n\n提示：此操作仅在本次运行期间生效。如需永久修改，请在 WebUI 后台配置中调整。")
+
+        # 更新内存中的状态
+        self.config_templates[target_idx - 1] = (name, new_enabled, content)
+
     @filter.command("sadstory_deltpl", permission=True)
     async def delete_template(self, event: AiocqhttpMessageEvent, tpl_name: str = ""):
         """删除故事模板。用法：/sadstory_deltpl 模板名，仅管理员可用"""
@@ -532,7 +573,6 @@ class SadStoryPlugin(Star):
             yield event.plain_result("用法：/sadstory_deltpl 模板名")
             return
 
-        # 尝试匹配文件
         fpath = os.path.join(TEMPLATES_DIR, f"{name}.txt")
         if not os.path.isfile(fpath):
             yield event.plain_result(f"模板「{name}」不存在，用 /sadstory_listtpl 查看列表")
