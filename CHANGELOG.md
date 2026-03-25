@@ -1,5 +1,15 @@
 # 更新日志
 
+## v0.3.4
+- 新增 Prompt 风格模板管理系统：LLM prompt（口语化/文学风格等）可在 WebUI 后台直接查看和编辑
+- 预置口语化、文学两个默认 prompt 风格模板，开箱即用
+- 支持多风格共存：生成故事时从已启用的风格中随机选取
+- 新增 `/sadstory_style` 命令：查看当前所有生成参数和 prompt 风格列表
+- 新增 `/sadstory_addstyle` 命令：在群内添加新的 prompt 风格
+- 新增 `/sadstory_usestyle 序号` 命令：切换 prompt 风格的启用/禁用状态
+- prompt 模板支持变量占位符：{protagonist}、{bystanders}、{min_msg}、{max_msg}、{theme_line}、{reference_section}、{emoji_instruction}
+- 无自定义风格启用时自动回退到内置默认风格
+
 ## v0.3.3
 - 修复配置类型：回退 template_list 为 list 类型（AstrBot 可能不支持 template_list），确保 WebUI 正常显示
 - 角色配置：主讲人QQ号、网友QQ号各一个 list，每条填一个QQ号，昵称自动从群获取
