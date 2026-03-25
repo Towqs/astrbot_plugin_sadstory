@@ -1,5 +1,15 @@
 # 更新日志
 
+## v0.5.4
+- 修复 WebUI 配置导入：改用 AstrBotConfig 参数接收配置，导入后 save_config() 持久化
+- 清理所有用户可见文案中的"故事"字样，统一为"伪装聊天"
+- 更新 _conf_schema.json 所有 hint 描述
+
+## v0.5.3
+- 修复 WebUI 配置导入：改用 AstrBotConfig 参数接收配置（而非 context.get_config）
+- 导入后调用 save_config() 持久化清空操作
+- 修复配置读取使用内存缓存而非实时数据的问题
+
 ## v0.5.2
 - 新增 WebUI 导入调试日志，排查 template_list 数据格式问题
 - 修复 metadata.yaml 版本号与 main.py 不一致的问题

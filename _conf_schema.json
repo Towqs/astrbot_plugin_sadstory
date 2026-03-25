@@ -7,30 +7,30 @@
     "default": 60
   },
   "story_min_messages": {
-    "description": "故事最少消息条数",
+    "description": "最少消息条数",
     "type": "int",
-    "hint": "生成故事的最少消息条数，太少故事不完整。",
+    "hint": "生成的最少消息条数，太少内容不完整。",
     "slider": { "min": 10, "max": 60, "step": 5 },
     "default": 30
   },
   "story_max_messages": {
-    "description": "故事最多消息条数",
+    "description": "最多消息条数",
     "type": "int",
-    "hint": "生成故事的最多消息条数，太多可能刷屏。",
+    "hint": "生成的最多消息条数，太多可能刷屏。",
     "slider": { "min": 20, "max": 120, "step": 5 },
     "default": 80
   },
   "bystander_count": {
     "description": "围观网友数量",
     "type": "int",
-    "hint": "故事中穿插评论的围观网友人数。",
+    "hint": "穿插评论的围观网友人数。",
     "slider": { "min": 1, "max": 8, "step": 1 },
     "default": 3
   },
   "use_face_emoji": {
     "description": "启用QQ表情",
     "type": "bool",
-    "hint": "开启后故事消息中会穿插QQ自带表情（流泪、大哭、叹气等），让聊天更真实。",
+    "hint": "开启后消息中会穿插QQ自带表情（流泪、大哭、叹气等），让聊天更真实。",
     "default": true
   },
   "use_casual_style": {
@@ -60,7 +60,7 @@
           "prompt_content": {
             "description": "写作指令",
             "type": "text",
-            "hint": "告诉 AI 怎么写故事。可用变量：{protagonist} {bystanders} {min_msg} {max_msg} {theme_line} {reference_section} {emoji_instruction}",
+            "hint": "告诉 AI 怎么生成内容。可用变量：{protagonist} {bystanders} {min_msg} {max_msg} {theme_line} {reference_section} {emoji_instruction}",
             "default": ""
           }
         }
@@ -68,17 +68,17 @@
     }
   },
   "use_story_template": {
-    "description": "启用故事模板参考",
+    "description": "启用模板参考",
     "type": "bool",
-    "hint": "开启后生成故事时会随机选一个模板给 AI 参考风格。",
+    "hint": "开启后生成时会随机选一个模板给 AI 参考风格。",
     "default": true
   },
   "add_story_templates": {
-    "description": "添加故事模板（保存后自动导入数据库）",
+    "description": "添加模板（保存后自动导入数据库）",
     "type": "template_list",
     "templates": {
       "tpl": {
-        "name": "故事模板",
+        "name": "内容模板",
         "hint": "填写后保存，会自动导入数据库。导入后此处会被清空。管理已有模板请用群指令 /sadstory_listtpl。",
         "items": {
           "tpl_name": {
@@ -94,7 +94,7 @@
           "content": {
             "description": "模板内容",
             "type": "text",
-            "hint": "一段完整的故事范文，AI 会参考它的风格来创作新故事。",
+            "hint": "一段完整的范文，AI 会参考它的风格来创作新内容。",
             "default": ""
           }
         }
@@ -104,7 +104,7 @@
   "source_group_id": {
     "description": "素材群群号",
     "type": "string",
-    "hint": "把机器人拉到一个群里，填写该群号，插件会从中读取成员作为故事角色。留空则不从群读取。",
+    "hint": "把机器人拉到一个群里，填写该群号，插件会从中读取成员作为角色。留空则不从群读取。",
     "default": ""
   },
   "use_card_as_name": {
@@ -116,7 +116,7 @@
   "protagonist_qq_list": {
     "description": "主讲人QQ号",
     "type": "list",
-    "hint": "每条填一个QQ号，故事主角从这里随机选。留空则随机选。",
+    "hint": "每条填一个QQ号，主角从这里随机选。留空则随机选。",
     "default": []
   },
   "bystander_qq_list": {
