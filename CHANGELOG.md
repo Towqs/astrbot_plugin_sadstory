@@ -1,5 +1,10 @@
 # 更新日志
 
+## v0.5.7
+- 新增双主角模式：`/sadstory @A @B [主题]` 同时艾特两个人，两人作为主角互动对话，围观网友穿插评论
+- 新增双主角专用提示词模板（口语化/文学风格），引导 LLM 生成两人之间的对话场景
+- 重构 At 解析器：支持提取最多 2 个被 @ 用户，向后兼容单 @ 和无 @ 用法
+
 ## v0.5.6
 - 修复 /sadstory_aistyle 和 /sadstory_aitpl 报错 AttributeError: get_registered_star_tools_manager
 - 改用 llm_generate 直接生成+解析 JSON，不再依赖已废弃的 func_tools_mgr 参数
