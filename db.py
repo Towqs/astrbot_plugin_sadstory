@@ -79,24 +79,32 @@ class SadStoryDB:
     async def toggle_style(self, style_id: int) -> tuple[str, bool] | None:
         """切换启用状态，返回 (name, new_enabled) 或 None"""
         self._ensure_conn()
-        async with self._conn.execute("SELECT name, enabled FROM writing_styles WHERE id=?", (style_id,)) as cur:
-            row = await cur.fetchone()
-        if not row:
-            return None
-        new_enabled = not bool(row["enabled"])
-        await self._conn.execute("UPDATE writing_styles SET enabled=? WHERE id=?", (int(new_enabled), style_id))
-        await self._conn.commit()
-        return (row["name"], new_enabled)
+        try:
+            async with self._conn.execute("SELECT name, enabled FROM writing_styles WHERE id=?", (style_id,)) as cur:
+                row = await cur.fetchone()
+            if not row:
+                return None
+            new_enabled = not bool(row["enabled"])
+            await self._conn.execute("UPDATE writing_styles SET enabled=? WHERE id=?", (int(new_enabled), style_id))
+            await self._conn.commit()
+            return (row["name"], new_enabled)
+        except Exception as e:
+            logger.error(f"[SadStory] toggle_style(id={style_id}) 失败: {e}")
+            raise
 
     async def delete_style(self, style_id: int) -> str | None:
         self._ensure_conn()
-        async with self._conn.execute("SELECT name FROM writing_styles WHERE id=?", (style_id,)) as cur:
-            row = await cur.fetchone()
-        if not row:
-            return None
-        await self._conn.execute("DELETE FROM writing_styles WHERE id=?", (style_id,))
-        await self._conn.commit()
-        return row["name"]
+        try:
+            async with self._conn.execute("SELECT name FROM writing_styles WHERE id=?", (style_id,)) as cur:
+                row = await cur.fetchone()
+            if not row:
+                return None
+            await self._conn.execute("DELETE FROM writing_styles WHERE id=?", (style_id,))
+            await self._conn.commit()
+            return row["name"]
+        except Exception as e:
+            logger.error(f"[SadStory] delete_style(id={style_id}) 失败: {e}")
+            raise
 
     # ========== 故事模板 ==========
 
@@ -132,21 +140,29 @@ class SadStoryDB:
 
     async def toggle_template(self, tpl_id: int) -> tuple[str, bool] | None:
         self._ensure_conn()
-        async with self._conn.execute("SELECT name, enabled FROM story_templates WHERE id=?", (tpl_id,)) as cur:
-            row = await cur.fetchone()
-        if not row:
-            return None
-        new_enabled = not bool(row["enabled"])
-        await self._conn.execute("UPDATE story_templates SET enabled=? WHERE id=?", (int(new_enabled), tpl_id))
-        await self._conn.commit()
-        return (row["name"], new_enabled)
+        try:
+            async with self._conn.execute("SELECT name, enabled FROM story_templates WHERE id=?", (tpl_id,)) as cur:
+                row = await cur.fetchone()
+            if not row:
+                return None
+            new_enabled = not bool(row["enabled"])
+            await self._conn.execute("UPDATE story_templates SET enabled=? WHERE id=?", (int(new_enabled), tpl_id))
+            await self._conn.commit()
+            return (row["name"], new_enabled)
+        except Exception as e:
+            logger.error(f"[SadStory] toggle_template(id={tpl_id}) 失败: {e}")
+            raise
 
     async def delete_template(self, tpl_id: int) -> str | None:
         self._ensure_conn()
-        async with self._conn.execute("SELECT name FROM story_templates WHERE id=?", (tpl_id,)) as cur:
-            row = await cur.fetchone()
-        if not row:
-            return None
-        await self._conn.execute("DELETE FROM story_templates WHERE id=?", (tpl_id,))
-        await self._conn.commit()
-        return row["name"]
+        try:
+            async with self._conn.execute("SELECT name FROM story_templates WHERE id=?", (tpl_id,)) as cur:
+                row = await cur.fetchone()
+            if not row:
+                return None
+            await self._conn.execute("DELETE FROM story_templates WHERE id=?", (tpl_id,))
+            await self._conn.commit()
+            return row["name"]
+        except Exception as e:
+            logger.error(f"[SadStory] delete_template(id={tpl_id}) 失败: {e}")
+            raise
