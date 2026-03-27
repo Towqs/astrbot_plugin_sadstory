@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import random
@@ -234,6 +235,7 @@ class SadStoryPlugin(Star):
         self.user_pool = []
         self.group_users = []
         self.cooldown_map = {}
+        self._cooldown_lock = asyncio.Lock()
         data_dir = StarTools.get_data_dir("astrbot_plugin_sadstory")
         self.db = SadStoryDB(Path(data_dir) / "sadstory.db")
 
@@ -416,14 +418,20 @@ class SadStoryPlugin(Star):
 
     # ==================== 冷却检查 ====================
 
-    def _check_cooldown(self, group_id: str) -> bool:
+    async def _check_and_set_cooldown(self, group_id: str) -> bool:
+        """原子化冷却检查+设置，防止竞态条件"""
         if self.cooldown_seconds <= 0:
             return True
-        last = self.cooldown_map.get(group_id, 0)
-        return (time.time() - last) >= self.cooldown_seconds
+        async with self._cooldown_lock:
+            last = self.cooldown_map.get(group_id, 0)
+            if (time.time() - last) >= self.cooldown_seconds:
+                self.cooldown_map[group_id] = time.time()
+                return True
+            return False
 
-    def _set_cooldown(self, group_id: str):
-        self.cooldown_map[group_id] = time.time()
+    def _clear_cooldown(self, group_id: str):
+        """清除冷却（生成失败时调用）"""
+        self.cooldown_map.pop(group_id, None)
 
     def _check_permission(self, event: AiocqhttpMessageEvent) -> bool:
         """检查用户是否有权限使用指令。列表为空则所有人可用。"""
@@ -438,7 +446,15 @@ class SadStoryPlugin(Star):
         """从数据库已启用的风格中随机选一个，没有则回退到内置默认"""
         enabled = await self.db.get_enabled_styles()
         if enabled:
-            return random.choice(enabled)
+            chosen = random.choice(enabled)
+            # 双主角模式下，检查自定义风格是否支持双主角变量
+            if dual_mode:
+                if "{protagonist_a}" in chosen and "{protagonist_b}" in chosen:
+                    return chosen
+                # 自定义风格不支持双主角，回退到内置
+                logger.warning("[SadStory] 自定义风格不支持双主角变量，回退到内置风格")
+                return STORY_PROMPT_DUAL_CASUAL if self.use_casual_style else STORY_PROMPT_DUAL_LITERARY
+            return chosen
         if dual_mode:
             return STORY_PROMPT_DUAL_CASUAL if self.use_casual_style else STORY_PROMPT_DUAL_LITERARY
         return STORY_PROMPT_CASUAL if self.use_casual_style else STORY_PROMPT_LITERARY
@@ -578,26 +594,45 @@ class SadStoryPlugin(Star):
             )
             raw = llm_resp.completion_text.strip()
 
-            start = raw.find("[")
-            end = raw.rfind("]") + 1
-            if start == -1 or end == 0:
-                logger.error("[SadStory] LLM 输出中未找到 JSON 数组")
-                return []
+            # 使用正则提取JSON数组，更健壮
+            import re
+            json_match = re.search(r'\[(?:\s|\n)*\{.*\}(?:\s|\n)*\]', raw, re.DOTALL)
+            if json_match:
+                story_data = json.loads(json_match.group(0))
+            else:
+                # 回退到原来的find方式
+                start = raw.find("[")
+                end = raw.rfind("]") + 1
+                if start == -1 or end == 0:
+                    logger.error("[SadStory] LLM 输出中未找到 JSON 数组")
+                    return []
+                try:
+                    story_data = json.loads(raw[start:end])
+                except json.JSONDecodeError as e:
+                    logger.error(f"[SadStory] JSON 解析失败: {e}, raw: {raw[:200]}")
+                    return []
 
-            story_data = json.loads(raw[start:end])
-
-            # 构建角色映射
+            # 构建角色映射（使用昵称+user_id双key，避免重名冲突）
+            role_map = {}
             if dual_mode:
-                role_map = {
-                    protagonist_a["nickname"]: protagonist_a,
-                    protagonist_b["nickname"]: protagonist_b,
-                }
+                role_map[protagonist_a["nickname"]] = protagonist_a
+                role_map[protagonist_a["user_id"]] = protagonist_a
+                role_map[protagonist_b["nickname"]] = protagonist_b
+                role_map[protagonist_b["user_id"]] = protagonist_b
                 fallback_user = protagonist_a
             else:
-                role_map = {protagonist["nickname"]: protagonist}
+                role_map[protagonist["nickname"]] = protagonist
+                role_map[protagonist["user_id"]] = protagonist
                 fallback_user = protagonist
             for b in bystanders:
                 role_map[b["nickname"]] = b
+                role_map[b["user_id"]] = b
+
+            # 消息条数约束
+            max_msgs = self.story_max_messages
+            if len(story_data) > max_msgs:
+                story_data = story_data[:max_msgs]
+                logger.info(f"[SadStory] 裁剪消息至 {max_msgs} 条")
 
             messages = []
             for item in story_data:
@@ -605,7 +640,16 @@ class SadStoryPlugin(Star):
                 content = item.get("content", "")
                 if not speaker or not content:
                     continue
-                user_info = role_map.get(speaker, fallback_user)
+                user_info = role_map.get(speaker)
+                if not user_info:
+                    # 昵称匹配失败时用模糊匹配（昵称包含speaker或speaker包含昵称）
+                    for nick, info in role_map.items():
+                        if nick != speaker and isinstance(nick, str) and isinstance(speaker, str):
+                            if speaker in nick or nick in speaker:
+                                user_info = info
+                                break
+                if not user_info:
+                    user_info = fallback_user
                 messages.append({
                     "nickname": user_info["nickname"],
                     "user_id": user_info["user_id"],
@@ -683,11 +727,11 @@ class SadStoryPlugin(Star):
             yield event.plain_result("这个命令只能在群聊中使用哦~")
             return
 
-        if not self._check_cooldown(group_id_str):
+        if not await self._check_and_set_cooldown(group_id_str):
             yield event.plain_result(f"太快了，休息一下吧~ ({self.cooldown_seconds}秒冷却)")
             return
 
-        self._set_cooldown(group_id_str)  # 通过检查后立即预占冷却
+        # 不再预占冷却，等成功后再设置
 
         theme = event.message_str.partition(" ")[2].strip()
         if len(theme) > 100:
@@ -723,13 +767,9 @@ class SadStoryPlugin(Star):
 
         yield event.plain_result("正在生成伪装聊天，请稍候...")
 
-        # 确保所有强制主角都在用户池中
-        for p in forced_protagonists:
-            if not any(u["user_id"] == p["user_id"] for u in self.user_pool):
-                self.user_pool.append(p)
-
         messages = await self._generate_story(event, theme, forced_protagonists or None)
         if not messages:
+            self._clear_cooldown(group_id_str)
             yield event.plain_result("生成失败了，可能是用户池不足（至少需要2人）或 LLM 服务暂时不可用，请稍后再试~")
             return
 
@@ -741,6 +781,7 @@ class SadStoryPlugin(Star):
             )
         except Exception as e:
             logger.error(f"[SadStory] 发送合并转发失败: {e}")
+            self._clear_cooldown(group_id_str)
             yield event.plain_result(f"发送失败了: {e}")
 
     @filter.command("sadstory_reload")
@@ -764,7 +805,7 @@ class SadStoryPlugin(Star):
             yield event.plain_result("刷新失败，请检查素材群号是否正确以及机器人是否在群内")
 
     @filter.command("sadstory_addtpl")
-    async def add_template(self, event: AiocqhttpMessageEvent, tpl_name: str = ""):
+    async def add_template(self, event: AiocqhttpMessageEvent):
         """添加故事模板。用法：/sadstory_addtpl 模板名（换行后跟模板内容）"""
         if not self._check_permission(event):
             return
@@ -831,7 +872,7 @@ class SadStoryPlugin(Star):
         yield event.plain_result(f"模板「{name}」{status}")
 
     @filter.command("sadstory_deltpl")
-    async def delete_template(self, event: AiocqhttpMessageEvent, tpl_name: str = ""):
+    async def delete_template(self, event: AiocqhttpMessageEvent):
         """删除故事模板。用法：/sadstory_deltpl ID"""
         if not self._check_permission(event):
             return
