@@ -226,7 +226,7 @@ STORY_PROMPT_DUAL_LITERARY = """你是一个伪装聊天创作者。请根据以
 """
 
 
-@register("astrbot_plugin_sadstory", "Towqs", "伪装聊天插件 - 以合并转发形式在群聊中展示伪装聊天", "0.6.2")
+@register("astrbot_plugin_sadstory", "Towqs", "伪装聊天插件 - 以合并转发形式在群聊中展示伪装聊天", "0.6.3")
 class SadStoryPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -235,6 +235,7 @@ class SadStoryPlugin(Star):
         self.group_users = []
         self.cooldown_map = {}
         self._cooldown_lock = asyncio.Lock()
+        self._import_lock = asyncio.Lock()
         data_dir = StarTools.get_data_dir("astrbot_plugin_sadstory")
         self.db = SadStoryDB(Path(data_dir) / "sadstory.db")
 
@@ -305,39 +306,40 @@ class SadStoryPlugin(Star):
 
     async def _import_webui_data(self):
         """从 WebUI 的 template_list 配置导入写作风格和故事模板到数据库，导入后清空"""
-        cfg = self.config
-        imported = 0
+        async with self._import_lock:
+            cfg = self.config
+            imported = 0
 
-        raw_styles = cfg.get("add_writing_styles", [])
-        logger.debug(f"[SadStory] WebUI raw_styles type={type(raw_styles).__name__}, value={raw_styles!r}")
-        if isinstance(raw_styles, list) and raw_styles:
-            for s in raw_styles:
-                if isinstance(s, dict):
-                    name = str(s.get("style_name", "")).strip()
-                    enabled = self._parse_bool(s.get("enabled", True))
-                    content = str(s.get("prompt_content", "")).strip()
-                    if name and content:
-                        await self.db.add_style(name, content, enabled)
-                        imported += 1
-            cfg["add_writing_styles"] = []
-            self.config.save_config()
+            raw_styles = cfg.get("add_writing_styles", [])
+            logger.debug(f"[SadStory] WebUI raw_styles type={type(raw_styles).__name__}, value={raw_styles!r}")
+            if isinstance(raw_styles, list) and raw_styles:
+                for s in raw_styles:
+                    if isinstance(s, dict):
+                        name = str(s.get("style_name", "")).strip()
+                        enabled = self._parse_bool(s.get("enabled", True))
+                        content = str(s.get("prompt_content", "")).strip()
+                        if name and content:
+                            await self.db.add_style(name, content, enabled)
+                            imported += 1
+                cfg["add_writing_styles"] = []
+                self.config.save_config()
 
-        raw_tpls = cfg.get("add_story_templates", [])
-        logger.debug(f"[SadStory] WebUI raw_tpls type={type(raw_tpls).__name__}, value={raw_tpls!r}")
-        if isinstance(raw_tpls, list) and raw_tpls:
-            for t in raw_tpls:
-                if isinstance(t, dict):
-                    name = str(t.get("tpl_name", "")).strip()
-                    enabled = self._parse_bool(t.get("enabled", True))
-                    content = str(t.get("content", "")).strip()
-                    if name and content:
-                        await self.db.add_template(name, content, enabled)
-                        imported += 1
-            cfg["add_story_templates"] = []
-            self.config.save_config()
+            raw_tpls = cfg.get("add_story_templates", [])
+            logger.debug(f"[SadStory] WebUI raw_tpls type={type(raw_tpls).__name__}, value={raw_tpls!r}")
+            if isinstance(raw_tpls, list) and raw_tpls:
+                for t in raw_tpls:
+                    if isinstance(t, dict):
+                        name = str(t.get("tpl_name", "")).strip()
+                        enabled = self._parse_bool(t.get("enabled", True))
+                        content = str(t.get("content", "")).strip()
+                        if name and content:
+                            await self.db.add_template(name, content, enabled)
+                            imported += 1
+                cfg["add_story_templates"] = []
+                self.config.save_config()
 
-        if imported:
-            logger.info(f"[SadStory] 从 WebUI 导入了 {imported} 条数据到数据库")
+            if imported:
+                logger.info(f"[SadStory] 从 WebUI 导入了 {imported} 条数据到数据库")
 
     async def _import_file_templates(self):
         """将 templates/ 目录下的 .txt 文件模板导入数据库（仅首次，按文件名去重）"""
@@ -594,19 +596,23 @@ class SadStoryPlugin(Star):
             )
             raw = llm_resp.completion_text.strip()
 
-            # 使用正则提取JSON数组，更健壮
-            json_match = re.search(r'\[(?:\s|\n)*\{.*\}(?:\s|\n)*\]', raw, re.DOTALL)
-            if json_match:
-                story_data = json.loads(json_match.group(0))
-            else:
-                # 回退到原来的find方式
-                start = raw.find("[")
-                end = raw.rfind("]") + 1
-                if start == -1 or end == 0:
-                    logger.error("[SadStory] LLM 输出中未找到 JSON 数组")
-                    return []
+            # 从第一个 [ 开始，渐进式扩展尝试解析JSON数组
+            start = raw.find("[")
+            if start == -1:
+                logger.error("[SadStory] LLM 输出中未找到 JSON 数组")
+                return []
+            story_data = None
+            for end_offset in range(1, len(raw) - start + 1):
                 try:
-                    story_data = json.loads(raw[start:end])
+                    candidate = raw[start:start + end_offset]
+                    story_data = json.loads(candidate)
+                    if isinstance(story_data, list):
+                        break
+                except json.JSONDecodeError:
+                    continue
+            if story_data is None:
+                try:
+                    story_data = json.loads(raw[start:])
                 except json.JSONDecodeError as e:
                     logger.error(f"[SadStory] JSON 解析失败: {e}, raw: {raw[:200]}")
                     return []
@@ -641,12 +647,18 @@ class SadStoryPlugin(Star):
                     continue
                 user_info = role_map.get(speaker)
                 if not user_info:
-                    # 昵称匹配失败时用模糊匹配（昵称包含speaker或speaker包含昵称）
+                    # 昵称匹配失败时用模糊匹配（长度接近且一方包含另一方）
+                    best_match = None
+                    best_score = 0
                     for nick, info in role_map.items():
                         if nick != speaker and isinstance(nick, str) and isinstance(speaker, str):
                             if speaker in nick or nick in speaker:
-                                user_info = info
-                                break
+                                score = min(len(speaker), len(nick))
+                                if score > best_score:
+                                    best_score = score
+                                    best_match = info
+                    if best_match:
+                        user_info = best_match
                 if not user_info:
                     user_info = fallback_user
                 messages.append({
@@ -743,8 +755,8 @@ class SadStoryPlugin(Star):
             for uid in at_ids:
                 info = await self._resolve_user_info(event.bot, int(group_id_str), uid)
                 forced_protagonists.append(info)
-            # 从 theme 中去掉 @ 部分的文本残留
-            theme = re.sub(r'@\S+\s*', '', theme).strip()
+            # 精确去除 theme 中的 @ 提及文本
+            theme = ' '.join(part for part in theme.split(' @') if part.strip())
 
         # 虚拟模式下跳过素材群拉取
         if not self.use_virtual_users:
@@ -838,7 +850,6 @@ class SadStoryPlugin(Star):
         """查看所有故事模板。用法：/sadstory_listtpl"""
         if not self._check_permission(event):
             return
-        self._reload_config()
         db_tpls = await self.db.get_templates()
 
         if not db_tpls:

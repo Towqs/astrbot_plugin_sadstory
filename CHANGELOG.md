@@ -1,5 +1,12 @@
 # 更新日志
 
+## v0.6.3
+- _import_webui_data 加并发锁，防止多请求重复写入
+- JSON 提取改为渐进式解析，替代贪婪正则
+- 角色模糊匹配改为最长匹配优先，避免短昵称误命中
+- 主题 @ 去除改用精确字符串处理，替代脆弱正则
+- 移除 list_templates/add_template 命令中的冗余 _reload_config 调用
+
 ## v0.6.2
 - StarTools 导入路径改为 astrbot.api.star，符合框架规范
 - 移除 _generate_story 内重复 import re
