@@ -1,5 +1,8 @@
 # 更新日志
 
+## v0.6.7
+- reload_users 命令加 _group_users_lock 保护，移除冗余 _reload_config 调用
+
 ## v0.6.6
 - 移除 sadstory 命令的冗余 _reload_config 调用，防止并发下用户池被意外重置
 - _fetch_group_users 加锁保护（_group_users_lock），防止并发写入冲突

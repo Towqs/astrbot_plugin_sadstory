@@ -226,7 +226,7 @@ STORY_PROMPT_DUAL_LITERARY = """你是一个伪装聊天创作者。请根据以
 """
 
 
-@register("astrbot_plugin_sadstory", "Towqs", "伪装聊天插件 - 以合并转发形式在群聊中展示伪装聊天", "0.6.6")
+@register("astrbot_plugin_sadstory", "Towqs", "伪装聊天插件 - 以合并转发形式在群聊中展示伪装聊天", "0.6.7")
 class SadStoryPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -802,8 +802,6 @@ class SadStoryPlugin(Star):
     @filter.command("sadstory_reload")
     async def reload_users(self, event: AiocqhttpMessageEvent):
         """重新加载素材群用户列表。用法：/sadstory_reload"""
-        self._reload_config()
-
         if not self._check_permission(event):
             return
 
@@ -811,13 +809,14 @@ class SadStoryPlugin(Star):
             yield event.plain_result("未配置素材群，请先在 WebUI 插件配置中设置素材群群号")
             return
 
-        fetched = await self._fetch_group_users(event.bot, self.source_group_id)
-        if fetched:
-            self.group_users = fetched
-            self._resolve_qq_lists(fetched)
-            yield event.plain_result(f"用户池已刷新，当前共 {len(self.user_pool)} 个用户")
-        else:
-            yield event.plain_result("刷新失败，请检查素材群号是否正确以及机器人是否在群内")
+        async with self._group_users_lock:
+            fetched = await self._fetch_group_users(event.bot, self.source_group_id)
+            if fetched:
+                self.group_users = fetched
+                self._resolve_qq_lists(fetched)
+                yield event.plain_result(f"用户池已刷新，当前共 {len(self.user_pool)} 个用户")
+            else:
+                yield event.plain_result("刷新失败，请检查素材群号是否正确以及机器人是否在群内")
 
     @filter.command("sadstory_addtpl")
     async def add_template(self, event: AiocqhttpMessageEvent):
