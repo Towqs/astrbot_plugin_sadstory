@@ -226,7 +226,7 @@ STORY_PROMPT_DUAL_LITERARY = """你是一个伪装聊天创作者。请根据以
 """
 
 
-@register("astrbot_plugin_sadstory", "Towqs", "伪装聊天插件 - 以合并转发形式在群聊中展示伪装聊天", "0.6.4")
+@register("astrbot_plugin_sadstory", "Towqs", "伪装聊天插件 - 以合并转发形式在群聊中展示伪装聊天", "0.6.5")
 class SadStoryPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -1110,6 +1110,9 @@ class SadStoryPlugin(Star):
                 yield event.plain_result(f"AI 生成的风格缺少必需变量 {', '.join(missing)}，请重试或手动添加")
                 return
             sid = await self.db.add_style(style_name, style_content)
+            if sid is None:
+                yield event.plain_result(f"风格「{style_name}」已存在，请使用新描述重试")
+                return
             yield event.plain_result(f"风格「{style_name}」已写入数据库（ID:{sid}，{len(style_content)}字）")
         except json.JSONDecodeError:
             logger.error("[SadStory] AI 生成风格 JSON 解析失败")
@@ -1168,7 +1171,13 @@ class SadStoryPlugin(Star):
             if len(tpl_content) < 50:
                 yield event.plain_result("AI 生成的故事模板内容太短，请重试")
                 return
+            if len(tpl_content) > 10000:
+                yield event.plain_result("AI 生成的故事模板内容过长，请重试")
+                return
             tpl_id = await self.db.add_template(tpl_name, tpl_content)
+            if tpl_id is None:
+                yield event.plain_result(f"故事模板「{tpl_name}」已存在，请使用新描述重试")
+                return
             yield event.plain_result(f"故事模板「{tpl_name}」已写入数据库（ID:{tpl_id}，{len(tpl_content)}字）")
         except json.JSONDecodeError:
             logger.error("[SadStory] AI 生成模板 JSON 解析失败")

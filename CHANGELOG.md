@@ -1,5 +1,9 @@
 # 更新日志
 
+## v0.6.5
+- ai_add_style/add_template 的 UNIQUE 冲突返回 None 未处理
+- ai_add_template 缺少内容上限（10000字）检查
+
 ## v0.6.4
 - db.py 所有写操作（toggle/delete）添加操作上下文日志
 
